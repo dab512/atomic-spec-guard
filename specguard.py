@@ -1961,7 +1961,7 @@ def main(argv=None):
     parser.add_argument("--go-parser")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
-    args = parser.parse_args(argv)
+    args = parser.parse_intermixed_args(argv)
     args.mode = "brief" if args.mode == "breef" else args.mode
     try:
         if args.repository_url:

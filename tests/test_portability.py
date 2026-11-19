@@ -46,6 +46,38 @@ class PortabilityTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertEqual(json.loads(result.stdout)["spec_root"], "specs")
 
+    # atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-5
+    # Полный контекст не зависит от порядка именованных аргументов на поддерживаемых версиях Python.
+    def test_full_mode_after_named_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "specs").mkdir()
+            (root / "specs/registry.json").write_text(json.dumps({"DEMO": "specs/demo.spec.md"}))
+            (root / "specs/demo.spec.md").write_text(
+                "---\nid: DEMO\nstatus: review\n---\n### DR-1. Rule\nReturn a stable value.\n"
+            )
+            (root / "sample.py").write_text(
+                "# atomic-spec://DEMO/DR-1\n# Return the agreed value.\ndef sample():\n    return 1\n"
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(P / "specguard.py"),
+                    "getcontext",
+                    "--root",
+                    str(root),
+                    "full",
+                    "--files",
+                    "sample.py",
+                    "--json",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual(json.loads(result.stdout)["documents"][0]["path"], "specs/demo.spec.md")
+
     # atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-18
     # Общий diff должен находить изменённый исходник за пределами каталогов прежнего приложения.
     def test_default_diff_scope_catches_unannotated_file(self):
