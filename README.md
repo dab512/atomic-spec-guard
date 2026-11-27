@@ -14,7 +14,7 @@ Guard находит настоящие комментарии `atomic-spec://SP
 выгружает пояснения для ревью. Анализ не вызывает LLM, не обращается к сети
 и не исполняет проверяемые исходники.
 
-Поддерживаются Python, Go, JS/TS/JSX/TSX и YAML. Нужны Git, Python **3.11+**,
+Поддерживаются Python, Go, JS/TS/JSX/TSX, PHP и YAML. Нужны Git, Python **3.11+**,
 Node.js **20+**; для Go-исходников и полного набора тестов — Go **1.22+**.
 Arcadia, ya, SkillStore, TOne, БД и сервисы для запуска не нужны.
 Подготовка зависимостей требует доступа к PyPI/npm; сам анализ работает локально.
@@ -33,7 +33,7 @@ GO111MODULE=off GOTOOLCHAIN=local go build -o goparser/goparser ./goparser
 
 Запускайте `python3 specguard.py`; публикация пакета в PyPI/npm не требуется.
 Python использует стандартную библиотеку; requirements-dev.txt нужен для линтера.
-TypeScript и YAML закреплены в package-lock.json. Команды ниже рассчитаны на
+Парсеры TypeScript, PHP и YAML закреплены в package-lock.json. Команды ниже рассчитаны на
 macOS/Linux/WSL с Bash. Для собственного Python-only проекта без YAML-политики
 Node/Go не требуются; для рекомендуемой YAML-политики нужен Node.
 
@@ -107,7 +107,9 @@ python3 specguard.py comments --root examples/minimal \
 По умолчанию `--spec-root specs`, `--scope .`; политика включается явным `--config`.
 Парсеры берутся из установки Guard, а не из зависимостей проверяемого приложения.
 Если Go-бинарник лежит отдельно, передайте `--go-parser /path/to/binary`.
-Для JS/YAML можно явно задать `--node` и `--node-modules`.
+Для JS/TS, PHP и YAML можно явно задать `--node` и `--node-modules`.
+Для `.php` используется грамматика PHP 8.5. PHP CLI, Composer и зависимости
+проверяемого приложения для анализа не нужны.
 
 ## Проверка изменений Git
 

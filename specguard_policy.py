@@ -78,6 +78,7 @@ TYPES = {
     "InterfaceDeclaration",
     "TypeAliasDeclaration",
     "EnumDeclaration",
+    "TraitDeclaration",
 }
 DECISIONS = {
     "*ast.IfStmt",
@@ -220,7 +221,7 @@ class Facts:
         self.path = path
         self.units = []
         ext = PurePosixPath(path).suffix
-        language = {".py": "python", ".go": "go", ".yaml": "yaml", ".yml": "yaml"}.get(
+        language = {".py": "python", ".go": "go", ".php": "php", ".yaml": "yaml", ".yml": "yaml"}.get(
             ext, "typescript" if ext in {".ts", ".tsx"} else "javascript"
         )
         code_lines = sorted(set((parsed.get("code_lines") or [])))

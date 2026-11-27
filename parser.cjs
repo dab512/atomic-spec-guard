@@ -4,12 +4,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const modules = path.resolve(process.argv[2]);
-let ts, yaml;
+let ts, yaml, PhpParser;
 
 // atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-3
 // URI начинает аннотацию; только последующий текст группы считается её пояснением.
 function annotation(text) {
-    const lines = text.split('\n').map(s => s.replace(/^\s*(?:\/\/|\/\*|\*\/?|#)\s?/, '').replace(/\*\/$/, '').trim());
+    const lines = text.split('\n').map(s => s.replace(/^\s*(?:\/\/|\/\*\*?|\*\/?|#)\s?/, '').replace(/\*\/$/, '').trim());
     const refs = [], notes = [];
     let atomic = false;
     for (const line of lines) {
@@ -86,14 +86,20 @@ function policyFacts(input, source, position) {
 
 // atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-16
 // Файловое обязательство можно выполнить реальной аннотацией без владельца; такую группу нельзя терять при проверке покрытия.
-function commentFacts(input, position, comments) {
+function commentGroups(input, position, comments) {
     const groups=[];
     for(const c of comments) {
         const last=groups.at(-1);
-        if(last && !input.source.slice(last.at(-1).end,c.pos).trim() && position(c.pos).line-position(last.at(-1).end).line<=1) last.push(c);
+        if(last && last[0].trailing === c.trailing && !input.source.slice(last.at(-1).end,c.pos).trim() && position(c.pos).line-position(last.at(-1).end).line<=1) last.push(c);
         else groups.push([c]);
     }
-    return groups.map(group=>{
+    return groups;
+}
+
+// atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-16
+// Физические координаты группы сохраняются независимо от наличия владельца.
+function commentFacts(input, position, comments) {
+    return commentGroups(input, position, comments).map(group=>{
         const start=group[0].pos,end=group.at(-1).end;
         return {kind:'CommentGroup', name:'file annotation', ...location(input,position,'CommentGroup',start,end), header_end:position(start).line, comment_start:position(start).line, ...annotation(group.map(c=>input.source.slice(c.pos,c.end)).join('\n'))};
     }).filter(u=>u.refs.length);
@@ -408,10 +414,98 @@ function configuration(input) {
 }
 
 const inputs = JSON.parse(fs.readFileSync(0, 'utf8'));
+
+// atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-8
+// Грамматика PHP задаёт объявления, а токены определяют комментарии и исключают текст шаблонов и литералов.
+function php(input) {
+    PhpParser ??= require(path.join(modules, 'php-parser'));
+    const parser = new PhpParser({parser: {version: '8.5'}, ast: {withPositions: true}});
+    const source = input.source;
+    const tree = parser.parseCode(source, input.path);
+    const starts = [0];
+    for (const match of source.matchAll(/\r\n|\n|\r/g)) starts.push(match.index + match[0].length);
+    const position = offset => {
+        let first = 0;
+        let last = starts.length;
+        while (first + 1 < last) {
+            const middle = Math.floor((first + last) / 2);
+            if (starts[middle] <= offset) first = middle;
+            else last = middle;
+        }
+        return {line: first + 1, column: offset - starts[first] + 1};
+    };
+    const comments = [], tokens = [], codeLines = new Set();
+    const nextCode = new Map();
+    let offset = 0, lastCodeLine = 0, pending;
+    for (const token of parser.tokenGetAll(source)) {
+        const [kind, value] = Array.isArray(token) ? token : ['', token];
+        const start = offset;
+        offset += value.length;
+        if (kind === 'T_COMMENT' || kind === 'T_DOC_COMMENT') {
+            pending = {pos: start, end: start + value.trimEnd().length, trailing: lastCodeLine === position(start).line};
+            comments.push(pending);
+        } else if (kind !== 'T_WHITESPACE') {
+            if (pending && !pending.trailing) nextCode.set(pending.end, start);
+            pending = undefined;
+            const code = kind === 'T_OPEN_TAG' || kind === 'T_CLOSE_TAG' ? value.trimEnd() : value;
+            tokens.push(JSON.stringify([kind, code]));
+            const endLine = position(start + code.length - 1).line;
+            lastCodeLine = kind === 'T_OPEN_TAG' ? 0 : endLine;
+            for (let line = position(start).line; line <= endLine; line++) {
+                codeLines.add(line);
+            }
+        }
+    }
+    const annotations = commentFacts(input, position, comments);
+    const owners = new Map();
+    for (const group of annotations) {
+        const start = nextCode.get(group.end_offset);
+        if (start !== undefined && position(start).line - group.end <= 1) owners.set(start, group);
+    }
+    const kinds = {
+        function: 'FunctionDeclaration', method: 'MethodDeclaration', closure: 'FunctionExpression',
+        arrowfunc: 'ArrowFunction', class: 'ClassDeclaration', interface: 'InterfaceDeclaration',
+        trait: 'TraitDeclaration', enum: 'EnumDeclaration',
+    };
+    const decisions = new Set(['if', 'for', 'foreach', 'while', 'do', 'switch', 'case', 'catch', 'match', 'matcharm', 'retif']);
+    const units = [];
+    const visit = node => {
+        let count = 1;
+        for (const child of Object.values(node)) {
+            for (const item of Array.isArray(child) ? child : [child]) {
+                if (item?.kind) count += visit(item);
+            }
+        }
+        const decision = decisions.has(node.kind);
+        const kind = kinds[node.kind] || (decision ? node.kind : undefined);
+        if (kind) {
+            const declaration = node.loc.start.offset;
+            const start = node.attrGroups?.[0]?.loc.start.offset ?? declaration;
+            const end = node.loc.end.offset;
+            const note = owners.get(start) ?? owners.get(declaration);
+            units.push({
+                kind, name: node.name?.name ?? node.kind, ...(decision && {role: 'decision'}),
+                ...location(input, position, kind, start, end),
+                header_end: node.body?.kind === 'block' ? node.body.loc.start.line : position(declaration).line,
+                comment_start: note?.start ?? position(start).line,
+                refs: note?.refs ?? [], description: note?.description ?? '', ast_nodes: count,
+            });
+        }
+        return count;
+    };
+    visit(tree);
+    const generated = comments.some(({pos, end}) =>
+        /^(?:\/\/|#|\/\*\*?)\s*(?:Code generated .* DO NOT EDIT\.|@generated\b)/i.test(source.slice(pos, end)));
+    return {path: input.path, facts_version: 2, units, tokens, annotations, generated, code_lines: [...codeLines]};
+}
+
 // atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-8
 // Ошибка одного исходника не отменяет полезные результаты остальных, но не позволяет считать всю выборку успешно разобранной.
 function parseInput(input) {
-    try { return /\.ya?ml$/.test(input.path) ? configuration(input) : typescript(input); }
+    try {
+        if (input.path.endsWith('.php')) return php(input);
+        return /\.ya?ml$/.test(input.path) ? configuration(input) : typescript(input);
+    }
     catch (error) { return {path: input.path, units: [], error: String(error.message)}; }
 }
 const results = inputs.map(parseInput);

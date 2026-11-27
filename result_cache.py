@@ -60,7 +60,9 @@ def implementation(args):
             "source": {name: file_hash(module / name) for name in names},
             "go_parser": file_hash(args.go_parser or module / "goparser/goparser"),
             "node": [node, node_stat.st_size, node_stat.st_mtime_ns] if node_stat else None,
-            "packages": {name: file_hash(modules / name / "package.json") for name in ["typescript", "yaml"]},
+            "packages": {
+                name: file_hash(modules / name / "package.json") for name in ["php-parser", "typescript", "yaml"]
+            },
         }
     )
 
