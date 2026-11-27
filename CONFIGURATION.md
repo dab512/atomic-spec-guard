@@ -20,7 +20,7 @@ python3 specguard.py audit --root /path/to/project --config path/to/project/atom
 python3 specguard.py check --root /path/to/project --config path/to/project/atomic-spec-guard.yaml --spec-root path/to/project/atomic/spec --scope path/to/project --go-parser /tmp/atomic-spec-guard-goparser --working-tree --base HEAD
 ```
 
-Для Go сначала соберите парсер по README; для JS/YAML нужны закреплённые npm-зависимости. Аргумент `--root` — локальный путь к checkout; остальные пути — от корня репозитория.
+Для Go сначала соберите парсер по README. Для JS/TS, PHP и YAML нужны закреплённые npm-зависимости. Аргумент `--root` — локальный путь к checkout. Остальные пути считаются от корня репозитория.
 
 8. На небольшой разнородной выборке проверьте error/warning/notice с `--explain`; отдельно внесите в изолированный пример изменение прав и убедитесь, что полезная ошибка не исчезла. После настройки используйте новую независимую выборку для оценки шума. Не считайте снижение общего количества ошибок оценкой FP.
 9. Подключайте к своему локальному build-entrypoint только явную команду с параметрами проекта. `scripts/local-check.sh` использует конфиг `specs/atomic-spec-guard.yaml` и допускает переменные SPECGUARD_CONFIG, SPECGUARD_SPEC_ROOT, SPECGUARD_SCOPE, SPECGUARD_BASE. CI приложения автоматически не включается.
@@ -102,7 +102,11 @@ diagnostics:
 
 - `node`: function/type/decision/declaration/config/sql/scenario/fixture/call/comment/other.
 - `kind`: исходный вид узла парсера, например `*ast.ValueSpec`, `BinaryExpression`, `YAMLMapping`.
-- `language`: go/python/javascript/typescript/yaml.
+- `language`: go/python/javascript/typescript/php/yaml.
+- PHP: функции и методы доступны как `node: function`, классы, интерфейсы,
+  трейты и enum — как `node: type`, ветвления — как `node: decision`.
+  PHPDoc и обычные PHP-комментарии с URI и пояснением привязываются
+  к непосредственно следующему блоку, включая объявления с атрибутами.
 - `all`, `any`, `not`: логические комбинации. `ancestor`, `descendant`: отношения между выделенными синтаксическими единицами.
 - `metrics`: условия `gt/gte/lt/lte/eq` для измеренных значений.
 - `glob`: семантика Python fnmatch; `*` может включать `/`. Для точного файла используйте `eq`.

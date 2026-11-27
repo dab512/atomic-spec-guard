@@ -26,6 +26,8 @@ from local_enforcement import baseline as local_baseline
 from urllib.parse import parse_qs, quote, urlparse
 
 DEFAULT_SPEC_ROOT = "specs"
+# atomic-spec://SKSTORE-ATOMIC-GUARD-001/DR-1
+# Явно выбранные PHP-файлы включаются в анализ, в том числе при выборе каталога и Git diff.
 EXTENSIONS = {
     ".py",
     ".go",
@@ -35,6 +37,7 @@ EXTENSIONS = {
     ".cjs",
     ".ts",
     ".tsx",
+    ".php",
     ".yaml",
     ".yml",
 }

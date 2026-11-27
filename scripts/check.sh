@@ -13,7 +13,7 @@ export SPECGUARD_GO_PARSER="$sg_tmp/goparser"
 export SPECGUARD_NODE="$sg_node"
 export SPECGUARD_NODE_MODULES="${SPECGUARD_NODE_MODULES:-$PWD/node_modules}"
 export RUFF_CACHE_DIR="$sg_tmp/ruff-cache"
-"$sg_node" -e 'const p=process.env.SPECGUARD_NODE_MODULES;require(p+"/typescript");require(p+"/yaml")'
+"$sg_node" -e 'const p=process.env.SPECGUARD_NODE_MODULES;require(p+"/typescript");require(p+"/yaml");require(p+"/php-parser")'
 sg_sources=(specguard.py specguard_policy.py annotation_language.py annotation_uniqueness.py result_cache.py local_enforcement.py selfcheck.py tests/*.py pilot/run_comparison.py)
 "$sg_ruff" check "${sg_sources[@]}"
 "$sg_ruff" format --check "${sg_sources[@]}"
